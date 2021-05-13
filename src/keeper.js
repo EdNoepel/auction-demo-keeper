@@ -22,6 +22,10 @@ const setupWallet = async (network, passwordPath, JSONKeystorePath) => {
   return signer;
 };
 
+// When debugging on a fork with ganache/hardhat, this corrects block.timestamp.
+const evm_start_timestamp = 1620867752;  // Thu May 13 2021 01:02:32 GMT+0000
+let evm_current_timestamp = evm_start_timestamp;
+
 let _this;
 export default class keeper {
   _clippers = [];
@@ -42,6 +46,14 @@ export default class keeper {
 
   // Check if there's an opportunity in Uniswap & OasisDex to profit with a LIQ2.0 flash loan
   async _opportunityCheck(collateral, oasis, uniswap, clip) {
+    if (evm_start_timestamp > 0) {
+      evm_current_timestamp += Number(Config.vars.delay);
+      let result = await network.provider.getBlock();
+      console.debug(result);
+      console.debug(`Setting next block timestamp to ${evm_current_timestamp}`);
+      await network.provider.send("evm_setNextBlockTimestamp", [evm_current_timestamp]);
+      await network.provider.send("evm_mine");
+    }
     console.log('Checking auction opportunities for ' + collateral.name);
 
     await oasis.fetch();
@@ -186,6 +198,12 @@ export default class keeper {
   }
 
   async run() {
+    if (evm_start_timestamp > 0) {
+        console.debug(`Setting first block timestamp to ${evm_start_timestamp}`);
+        await network.provider.send("evm_setNextBlockTimestamp", [evm_start_timestamp]);
+        await network.provider.send("evm_mine");
+    }
+
     this._wallet = await setupWallet(network, this.walletPasswordPath, this.walletKeystorePath);
     for (const name in Config.vars.collateral) {
       if (Object.prototype.hasOwnProperty.call(Config.vars.collateral, name)) {
